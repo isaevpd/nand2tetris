@@ -1,0 +1,88 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/Memory.hdl
+
+/**
+ * The complete address space of the Hack computer's memory,
+ * including RAM and memory-mapped I/O. 
+ * The chip facilitates read and write operations, as follows:
+ *     Read:  out(t) = Memory[address(t)](t)
+ *     Write: if load(t-1) then Memory[address(t-1)](t) = in(t-1)
+ * In words: the chip always outputs the value stored at the memory 
+ * location specified by address. If load==1, the in value is loaded 
+ * into the memory location specified by address. This value becomes 
+ * available through the out output from the next time step onward.
+ * Address space rules:
+ * Only the upper 16K+8K+1 words of the Memory chip are used. 
+ * Access to address>0x6000 is invalid. Access to any address in 
+ * the range 0x4000-0x5FFF results in accessing the screen memory 
+ * map. Access to address 0x6000 results in accessing the keyboard 
+ * memory map. The behavior in these addresses is described in the 
+ * Screen and Keyboard chip specifications given in the book.
+ */
+
+CHIP Memory {
+    IN in[16], load, address[15];
+    OUT out[16];
+
+    PARTS:
+    // addr+(-16384)(SCREEN value 1100000000000000)
+    Add16(
+        a[0..14]=address,
+        b[14..15]=true,
+        out=norm-addr,
+        out[15]=norm-addr-msb,
+        out[0..12]=norm-addr-screen
+    );
+    // 110000000000000 - KBD value
+    // check if address is equal to keyboard
+
+    // first check if last 8 bits of address are 0
+    Or8Way(in=address[0..7], out=eight-lsb-addr);
+    // then check if first 8 bits of address
+    // except for 14 and 13 are zero
+    Or8Way(
+        in[0..4]=address[8..12],
+        out=eight-msb-addr
+    );
+    // combine these 2
+    Or(a=eight-msb-addr, b=eight-lsb-addr, out=msb-or-lsb);
+    // check bits 14 and 13
+    And(a=address[13], b=address[14], out=kbd-bits);
+    // negate combination to get 1 if there are no redundant
+    // ones in the address
+    Not(in=msb-or-lsb, out=rest-are-zeros);
+    // check 14 and 13 is 1 and rest are zeroes
+    And(a=rest-are-zeros, b=kbd-bits, out=addr-is-kbd);
+    // check if norm-addr is negative or zero
+    And(a=norm-addr-msb, b=true, out=norm-addr-negative);
+
+    DMux(
+        in=load,
+        sel=norm-addr-negative,
+        a=load-screen-beta,
+        b=load-ram-beta
+    );
+    Not(in=addr-is-kbd, out=not-kbd);
+    And(a=not-kbd, b=load-ram-beta, out=load-ram);
+    And(a=not-kbd, b=load-screen-beta, out=load-screen);
+    // if kbd: return keyboard
+    // elif norm-addr is not negative: pass it to screen
+    // else pass address to RAM16K
+    Keyboard(out=keyboard);
+    Screen(in=in, address=norm-addr-screen, load=load-screen, out=screen);
+    RAM16K(in=in, address=address[0..13], load=load-ram, out=ram);
+    Mux16(
+        a=screen,
+        b=ram,
+        sel=norm-addr-negative,
+        out=screen-or-ram
+    );
+    Mux16(
+        a=screen-or-ram,
+        b=keyboard,
+        sel=addr-is-kbd,
+        out=out
+    );
+}
