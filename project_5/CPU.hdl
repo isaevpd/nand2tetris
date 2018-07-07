@@ -1,0 +1,154 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+
+/**
+ * The Hack CPU (Central Processing unit), consisting of an ALU,
+ * two registers named A and D, and a program counter named PC.
+ * The CPU is designed to fetch and execute instructions written in 
+ * the Hack machine language. In particular, functions as follows:
+ * Executes the inputted instruction according to the Hack machine 
+ * language specification. The D and A in the language specification
+ * refer to CPU-resident registers, while M refers to the external
+ * memory location addressed by A, i.e. to Memory[A]. The inM input 
+ * holds the value of this location. If the current instruction needs 
+ * to write a value to M, the value is placed in outM, the address 
+ * of the target location is placed in the addressM output, and the 
+ * writeM control bit is asserted. (When writeM==0, any value may 
+ * appear in outM). The outM and writeM outputs are combinational: 
+ * they are affected instantaneously by the execution of the current 
+ * instruction. The addressM and pc outputs are clocked: although they 
+ * are affected by the execution of the current instruction, they commit 
+ * to their new values only in the next time step. If reset==1 then the 
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
+ * than to the address resulting from executing the current instruction. 
+ */
+
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+    // assign variables for convenience
+    And16(
+        a=instruction,
+        b=instruction,
+        out[15]=opcode,
+        out[12]=a,
+        out[11]=c-1,
+        out[10]=c-2,
+        out[9]=c-3,
+        out[8]=c-4,
+        out[7]=c-5,
+        out[6]=c-6,
+        out[5]=d-1,
+        out[4]=d-2,
+        out[3]=d-3,
+        out[2]=j-1,
+        out[1]=j-2,
+        out[0]=j-3
+    );
+    
+    // A or M
+    Mux16(a=A-val, b=inM, sel=a, out=A-or-M);
+    // DRegister(out=D-val);
+    ALU(
+        x=D-val,
+        y=A-or-M,
+        zx=c-1,
+        nx=c-2,
+        zy=c-3,
+        ny=c-4,
+        f=c-5,
+        no=c-6,
+        out=comp,
+        out=outM,
+        zr=zr,
+        ng=ng
+    );
+
+    // negate opcode to have it as a variable
+    Not(in=opcode, out=is-a-instruction);
+    // load value into a register either if its LHS of C instruction
+    // or if we have an A instruction
+    Or(a=is-a-instruction, b=d-1, out=load-a);
+    Mux16(a=comp, b=instruction, sel=is-a-instruction, out=a-input);
+    ARegister(in=a-input, load=load-a, out[0..14]=addressM, out=A-val);
+    // load value into D if its a C instruction and d-2 is asserted
+    And(a=opcode, b=d-2, out=load-d);
+    DRegister(in=comp, load=load-d, out=D-val);
+    And(a=opcode, b=d-3, out=writeM);
+    // compute JMP condition
+    // start with unconditional jump(JMP: 111):
+    And(a=j1-and-j2, b=j-3, out=jmp-match);
+    // JLE: 110
+    // find out if j1-j2-j3 are 110
+    And(a=j-1, b=j-2, out=j1-and-j2);
+    Not(in=j-3, out=not-j3);
+    And(a=j1-and-j2, b=not-j3, out=jle);
+    // find out if alu output is lte to zero
+    Or(a=zr, b=ng, out=lte);
+    // get conditional value
+    And(a=lte, b=jle, out=jle-match);
+    // JNE: 101
+    // find out if j1-j2-j3 are 101
+    And(a=j-1, b=j-3, out=j1-and-j3);
+    Not(in=j-2, out=not-j2);
+    And(a=j1-and-j3, b=not-j2, out=jne);
+    // find out if alu output is not equal to zero
+    Not(in=zr, out=not-zr);
+    // get conditional value
+    And(a=not-zr, b=jne, out=jne-match);
+    // JLT: 100
+    // find out if j1-j2-j3 are 100
+    And(a=not-j2, b=not-j3, out=not-j2-and-not-j3);
+    And(a=j-1, b=not-j2-and-not-j3, out=jlt);
+    // get conditional value
+    And(a=ng, b=jlt, out=jlt-match);
+    // JGE 011
+    // find out if j1-j2-j3 are 011
+    Not(in=j-1, out=not-j1);
+    And(a=j-2, b=j-3, out=j2-and-j3);
+    And(a=not-j1, b=j2-and-j3, out=jge);
+    // find out if alu output is not negative
+    Not(in=ng, out=not-ng);
+    // get conditional value
+    And(a=not-ng, b=jge, out=jge-match);
+    // JEQ 010
+    // find out if j1-j2-j3 are 010
+    And(a=not-j1, b=j-2, out=not-j1-and-j2);
+    And(a=not-j1-and-j2, b=not-j3, out=jeq);
+    // get conditional value
+    And(a=zr, b=jeq, out=jeq-match);
+    // JGT 001
+    // find out if j1-j2-j3 are 001
+    And(a=not-j1, b=not-j2, out=not-j1-and-not-j2);
+    And(a=not-j1-and-not-j2, b=j-3, out=jgt);
+    // find out if alu output is not negative and not zero
+    And(a=not-ng, b=not-zr, out=not-ng-and-not-zr);
+    // get conditional value
+    And(a=not-ng-and-not-zr, b=jgt, out=jgt-match);
+    // check if we need to jump if at least one of these match:
+    Or8Way(
+        in[0]=jmp-match,
+        in[1]=jle-match,
+        in[2]=jne-match,
+        in[3]=jlt-match,
+        in[4]=jge-match,
+        in[5]=jeq-match,
+        in[6]=jgt-match,
+        out=jmp-temp
+    );
+    And(a=opcode, b=jmp-temp, out=jmp);
+    PC(in=A-val, load=jmp, inc=true, reset=reset, out[0..14]=pc);
+}
