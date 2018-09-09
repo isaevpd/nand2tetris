@@ -1,0 +1,450 @@
+class Main {
+    // variables to draw the grid
+    static int CELL_WIDTH;
+    static int CELL_HEIGHT;
+    static int MARGIN;
+    static int MAX_ROW;
+
+    // variables to draw the cells
+    static int TEXT_HEIGHT;
+    static int TEXT_WIDTH;
+    static int START_ROW;
+    static int START_COL;
+
+    // game related variables/constants
+    static int DIMENSION;
+    // direction constants
+    static int UP;
+    static int DOWN;
+    static int LEFT;
+    static int RIGHT;
+
+    // dummy value used instead of None
+    static int DUMMY_VALUE;
+
+    static Array OFFSETS;
+    static Array grid;
+    static Array DIRECTIONS;
+
+    function Array moveZeros(Array line) {
+        /**
+        Helper function to transform array from
+        [1, 0, 1 0] to [1, 1, 0, 0]
+        used in merge
+        */
+        var Array moved;
+        var int i, current;
+
+        let moved = Array.new(DIMENSION);
+        let i = 0;
+        while (i < DIMENSION) {
+            let moved[i] = 0;
+            let i = i + 1;
+        }
+
+        let i = 0;
+        let current = 0;
+
+        while (i < DIMENSION) {
+            if (~(line[i] = 0)) {
+                let moved[current] = line[i];
+                let current = current + 1;
+            }
+            let i = i + 1;
+        }
+        return moved;
+    }
+
+    function Array merge(Array line) {
+        /**
+        Logic to merge the tiles
+        */
+        var Array moved, merged;
+        var int i, current;
+
+        // move all zeros to the end
+        let moved = Main.moveZeros(line);
+
+        // sum values if they're the same and put 0 as next element
+        let i = 0;
+        while (i < (DIMENSION - 1)) {
+            if (moved[i] = moved[i+1]) {
+                let moved[i] = moved[i] + moved[i+1];
+                let moved[i+1] = 0;
+            }
+            let i = i + 1;
+        }
+
+        // move zeros to the end again
+        let merged = Main.moveZeros(moved);
+
+        do moved.dispose();
+        return merged;
+    }
+
+    function void prinstStringConst(String s) {
+        do Output.printString(s);
+        do s.dispose();
+        return;
+    }
+
+    function void drawGrid() {
+        var int i;
+        var String message;
+        // left
+        do Screen.drawRectangle(
+            0, 0, MARGIN, MAX_ROW
+        );
+        // right
+        do Screen.drawRectangle(
+            MARGIN + (CELL_WIDTH * 4),
+            0,
+            (MARGIN * 2) + (CELL_WIDTH * 4),
+            MAX_ROW
+        );
+        // bottom
+        do Screen.drawRectangle(
+            MARGIN,
+            MAX_ROW - MARGIN,
+            MARGIN + (CELL_WIDTH * 4),
+            MAX_ROW
+        );
+
+        // draw horizontal + vertical lines
+        let i = 0;
+        while (i < DIMENSION) {
+            // vertical line
+            do Screen.drawLine(
+                MARGIN + (CELL_WIDTH * i),
+                MARGIN,
+                MARGIN + (CELL_WIDTH * i),
+                MAX_ROW - MARGIN
+            );
+            // horizontal line
+            do Screen.drawLine(
+                MARGIN,
+                MARGIN + (CELL_HEIGHT * i),
+                MARGIN + (CELL_WIDTH * 4),
+                MARGIN + (CELL_HEIGHT * i)
+            );
+            let i = i + 1;
+        }
+        do Output.moveCursor(1, 10);
+
+        let message = "Welcome to the 2048 game!";
+        do Main.prinstStringConst(message);
+        return;
+    }
+
+    function void makeEmptyGrid() {
+        /**
+        Populate the grid
+        */
+        var Array row;
+        var int i, j;
+
+        let i = 0;
+        while (i < DIMENSION) {
+            let row = Array.new(4);
+            let grid[i] = row;
+            let i = i + 1;
+        }
+        return;
+    }
+
+    function void printNumber(int row, int col, int number) {
+        /**
+        Helper function used in draw() to display numbers
+        on the grid
+        */
+        do Output.moveCursor(row, col);
+        do Output.printInt(number);
+        return;
+    }
+
+    function void move(int direction) {
+        /**
+        Main logic of the game:
+        move all tiles in a given direction
+        */
+        var Array tuple, indices, rowIndices, line, mergedLine, offset, temp;
+        var int i, j, offsetRow, offsetCol, value, prevValue, row, col;
+        var boolean changed;
+        
+        let changed = false;
+        let indices = DIRECTIONS[direction];
+        let offset = OFFSETS[direction];
+        let offsetRow = offset[0];
+        let offsetCol = offset[1];
+
+        let i = 0;
+        // iterate over all rows
+        while (i < DIMENSION) {
+            let temp = indices[i];
+
+            let tuple = Array.new(2);
+            let tuple[0] = temp[0];
+            let tuple[1] = temp[1];
+
+            let line = Array.new(4);
+
+            let line[0] = Main.getTile(
+                tuple[0],
+                tuple[1]
+            );
+            let rowIndices = Array.new(4);
+            let rowIndices[0] = tuple;
+
+            let j = 1;
+            // iterate over each element in a row
+            // put indices into rowIndices
+            // and values into line
+            while (j < DIMENSION) {
+                let temp = rowIndices[j-1];
+
+                let tuple = Array.new(2);
+                let tuple[0] = (temp[0] + offsetRow);
+                let tuple[1] = (temp[1] + offsetCol);
+
+                let line[j] = Main.getTile(
+                    tuple[0],
+                    tuple[1]
+                );
+                let rowIndices[j] = tuple;
+                let j = j + 1;
+            }
+            
+            // merge the row
+            let mergedLine = Main.merge(line);
+
+            do line.dispose();
+
+            let j = 0;
+            // iterate over all elements in a row
+            // and put the updated values into the grid
+            while (j < DIMENSION) {
+
+                let value = mergedLine[j];
+                let tuple = rowIndices[j];
+
+                let row = tuple[0];
+                let col = tuple[1];
+
+                let prevValue = Main.getTile(row, col);
+
+                if (~(changed)) {
+                    if (~(value = prevValue)) {
+                        let changed = true;
+                    }
+                }
+
+                do Main.setTile(row, col, value);
+
+                let j = j + 1;
+                do tuple.dispose();
+            }
+            let i = i + 1;
+
+            do rowIndices.dispose();
+            do mergedLine.dispose();
+        }
+
+        if (changed) {
+            do Main.newTile();
+        }
+
+        return;
+    }
+
+    function void newTile() {
+        var int i, j, value, cell;
+        var Array row;
+        let value = Main.generateNextTile();
+
+        let i = 0;
+        while (i < DIMENSION) {
+            let j = 0;
+            let row = grid[i];
+            while (j < DIMENSION) {
+                let cell = row[j];
+                if (cell = 0) {
+                    let row[j] = value;
+                    return;
+                }
+                let j = j + 1;
+            }
+            let i = i + 1;
+        }
+
+        return;
+    }
+
+    function int generateNextTile() {
+        var int number;
+
+        let number = Random.randRange(9);
+        if (number = 0) {
+            return 4;
+        }
+        return 2;
+    }
+
+    function void draw() {
+        var int i, j, row, value;
+
+        do Screen.clearScreen();
+        do Main.drawGrid();
+
+        let i = 0;
+        while (i < DIMENSION) {
+            let row = grid[i];
+            let j = 0;
+            while (j < DIMENSION) {
+                let value = row[j];
+                do Main.printNumber(
+                    START_ROW + (i * TEXT_HEIGHT),
+                    START_COL + (j * TEXT_WIDTH),
+                    value
+                );
+                let j = j + 1;
+            }
+            let i = i + 1;
+        }
+        return;
+    }
+
+    function int getTile(int row, int col) {
+        var Array arr;
+        var int value;
+        let arr = grid[row];
+        let value = arr[col];
+
+        return value;
+    }
+
+    function void setTile(int row, int col, int val) {
+        var Array arr;
+        let arr = grid[row];
+        let arr[col] = val;
+        return;
+    }
+
+    function void computeDirection(int direction, int first, int second) {
+        var Array row, tuple;
+        var int i, first_copy, second_copy;
+        let first_copy = first;
+        let second_copy = second;
+
+        let i = 0;
+        let row = Array.new(4);
+        while (i < DIMENSION) {
+            let tuple = Array.new(2);
+            if (first = DUMMY_VALUE) {
+                let first_copy = i;
+            }
+            if (second = DUMMY_VALUE) {
+                let second_copy = i;
+            }
+            let tuple[0] = first_copy;
+            let tuple[1] = second_copy;
+            let row[i] = tuple;
+            let i = i + 1;
+        }
+        let DIRECTIONS[direction] = row;
+        return;
+    }
+
+    function void reset() {
+        do Main.makeEmptyGrid();
+        do Main.newTile();
+        do Main.newTile();
+        return;
+    }
+
+    function void main() {
+        var int i;
+        var char key;
+        var Array test, row;
+
+        let CELL_WIDTH = 68;
+        let CELL_HEIGHT = 48;
+        let MARGIN = 32;
+        let MAX_ROW = 255;
+
+        let TEXT_HEIGHT = 4;
+        let TEXT_WIDTH = 8;
+        let START_ROW = 5;
+        let START_COL = 7;
+
+        let DIMENSION = 4;
+        do Random.setSeed(5);
+        let grid = Array.new(4);
+
+        let UP = 0;
+        let DOWN = 1;
+        let LEFT = 2;
+        let RIGHT = 3;
+
+
+        let DIRECTIONS = Array.new(4);
+        let DUMMY_VALUE = 100;
+        do Main.computeDirection(UP, 0, DUMMY_VALUE);
+        do Main.computeDirection(DOWN, 3, DUMMY_VALUE);
+        do Main.computeDirection(LEFT, DUMMY_VALUE, 0);
+        do Main.computeDirection(RIGHT, DUMMY_VALUE, 3);
+
+        let OFFSETS = Array.new(4);
+        let row = Array.new(2);
+        let row[0] = 1;
+        let row[1] = 0;
+        let OFFSETS[UP] = row;
+
+        let row = Array.new(2);
+        let row[0] = -1;
+        let row[1] = 0;
+        let OFFSETS[DOWN] = row;
+
+        let row = Array.new(2);
+        let row[0] = 0;
+        let row[1] = 1;
+        let OFFSETS[LEFT] = row;
+
+        let row = Array.new(2);
+        let row[0] = 0;
+        let row[1] = -1;
+        let OFFSETS[RIGHT] = row;
+
+        do Main.reset();
+        do Main.draw();
+
+        let key = 0;
+        while (true) {
+            let key = Keyboard.keyPressed();
+            // up arrow
+            if (key = 131) {
+                do Main.move(UP);
+                do Main.draw();
+            }
+            // down arrow
+            if (key = 133) {
+                do Main.move(DOWN);
+                do Main.draw();
+            }
+            // left arrow
+            if (key = 130) {
+                do Main.move(LEFT);
+                do Main.draw();
+            }
+            // right arrow
+            if (key = 132) {
+                do Main.move(RIGHT);
+                do Main.draw();
+            }
+            while (~(key = 0)) {
+                let key = Keyboard.keyPressed();
+            }
+        }
+
+        return;
+    }
+}
