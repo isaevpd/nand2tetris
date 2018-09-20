@@ -612,7 +612,7 @@ class CompilationEngine(object):
                     arg_count + 1
                 )
 
-        elif kind_of in (ARG, VAR):
+        elif kind_of in (ARG, VAR, STATIC):
             self.vm_writer.write_push(kind_of, index_of)
             self.vm_writer.write_call(
                 '%s.%s' % (type_of, after_dot_or_paren),
