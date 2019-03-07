@@ -733,7 +733,6 @@ class CompilationEngine(object):
             self.vm_writer.write_push('constant', 0)
         self.eat_and_append_token(SYMBOL, ';')
         self.vm_writer.write_return()
-        self.in_return = False
         self.close_tag('returnStatement')
 
     def compile_if(self):

@@ -94,9 +94,6 @@ class JackTokenizer(object):
 
         self.cleaned_input = cleaned_input.lstrip()
 
-    def __iter__(self):
-        return self
-
     def match_and_extract(self, token_type, advance=True):
         regex = REGEX_MAPPING[token_type]
         match = re.match(
@@ -165,7 +162,7 @@ class ParseTree(object):
 
     def __repr__(self):
         return self.representation
-
+    
 
 class CompilationEngine(object):
     tokenizer = None
